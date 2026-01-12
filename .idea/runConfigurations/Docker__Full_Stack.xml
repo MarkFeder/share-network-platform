@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Docker: Full Stack" type="docker-deploy">
+    <deployment type="docker-compose.yml">
+      <settings>
+        <option name="composePaths">
+          <list>
+            <option value="$PROJECT_DIR$/docker-compose.yml" />
+          </list>
+        </option>
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+</component>
