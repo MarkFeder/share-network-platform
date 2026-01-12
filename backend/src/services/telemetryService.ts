@@ -1,4 +1,5 @@
-import { PrismaClient, TelemetryData, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+import type { TelemetryData } from '@prisma/client';
 import { cache, keys, pubsub } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
 import { TelemetryInput, AlertType, AlertSeverity } from '../types/index.js';
@@ -33,7 +34,7 @@ export const telemetryService = {
         temperature: input.temperature,
         signalStrength: input.signalStrength,
         connectedClients: input.connectedClients,
-        metadata: input.metadata as Prisma.JsonObject,
+        metadata: input.metadata as Prisma.InputJsonValue,
       },
     });
 
@@ -72,7 +73,7 @@ export const telemetryService = {
         temperature: input.temperature,
         signalStrength: input.signalStrength,
         connectedClients: input.connectedClients,
-        metadata: input.metadata as Prisma.JsonObject,
+        metadata: input.metadata as Prisma.InputJsonValue,
       })),
     });
 
@@ -146,14 +147,14 @@ export const telemetryService = {
       deviceId,
       period,
       timestamp: startTime,
-      avgLatency: avg(data.map((d) => d.latencyMs)),
-      maxLatency: max(data.map((d) => d.latencyMs)),
-      minLatency: min(data.map((d) => d.latencyMs)),
-      avgPacketLoss: avg(data.map((d) => d.packetLoss)),
-      avgBandwidthUp: avg(data.map((d) => d.bandwidthUp)),
-      avgBandwidthDown: avg(data.map((d) => d.bandwidthDown)),
-      avgCpuUsage: avg(data.map((d) => d.cpuUsage)),
-      avgMemoryUsage: avg(data.map((d) => d.memoryUsage)),
+      avgLatency: avg(data.map((d: TelemetryData) => d.latencyMs)),
+      maxLatency: max(data.map((d: TelemetryData) => d.latencyMs)),
+      minLatency: min(data.map((d: TelemetryData) => d.latencyMs)),
+      avgPacketLoss: avg(data.map((d: TelemetryData) => d.packetLoss)),
+      avgBandwidthUp: avg(data.map((d: TelemetryData) => d.bandwidthUp)),
+      avgBandwidthDown: avg(data.map((d: TelemetryData) => d.bandwidthDown)),
+      avgCpuUsage: avg(data.map((d: TelemetryData) => d.cpuUsage)),
+      avgMemoryUsage: avg(data.map((d: TelemetryData) => d.memoryUsage)),
       sampleCount: data.length,
     };
 
@@ -181,7 +182,7 @@ export const telemetryService = {
       select: { id: true },
     });
 
-    const deviceIds = devices.map((d) => d.id);
+    const deviceIds = devices.map((d: typeof devices[number]) => d.id);
 
     const [latestTelemetry, alertCounts] = await Promise.all([
       prisma.telemetryData.findMany({
@@ -201,16 +202,16 @@ export const telemetryService = {
       }),
     ]);
 
-    const avgLatency = avg(latestTelemetry.map((t) => t.latencyMs)) ?? 0;
-    const avgPacketLoss = avg(latestTelemetry.map((t) => t.packetLoss)) ?? 0;
-    const totalBandwidthUp = sum(latestTelemetry.map((t) => t.bandwidthUp)) ?? 0;
-    const totalBandwidthDown = sum(latestTelemetry.map((t) => t.bandwidthDown)) ?? 0;
+    const avgLatency = avg(latestTelemetry.map((t: TelemetryData) => t.latencyMs)) ?? 0;
+    const avgPacketLoss = avg(latestTelemetry.map((t: TelemetryData) => t.packetLoss)) ?? 0;
+    const totalBandwidthUp = sum(latestTelemetry.map((t: TelemetryData) => t.bandwidthUp)) ?? 0;
+    const totalBandwidthDown = sum(latestTelemetry.map((t: TelemetryData) => t.bandwidthDown)) ?? 0;
 
     return {
       avgLatency,
       avgPacketLoss,
       totalBandwidth: { up: totalBandwidthUp, down: totalBandwidthDown },
-      alertCounts: Object.fromEntries(alertCounts.map((a) => [a.severity, a._count])),
+      alertCounts: Object.fromEntries(alertCounts.map((a: typeof alertCounts[number]) => [a.severity, a._count])),
       dataPoints: latestTelemetry.length,
     };
   },

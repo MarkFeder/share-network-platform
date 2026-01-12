@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { AuthenticatedRequest, JwtPayload, UserRole } from '../types/index.js';
 import { createContextLogger } from '../utils/logger.js';
@@ -47,13 +47,16 @@ export const authorize = (...allowedRoles: UserRole[]) => {
 };
 
 export const generateTokens = (payload: JwtPayload) => {
-  const accessToken = jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn,
-  });
+  const accessTokenOptions: SignOptions = {
+    expiresIn: config.jwt.expiresIn as SignOptions['expiresIn'],
+  };
 
-  const refreshToken = jwt.sign({ userId: payload.userId }, config.jwt.secret, {
-    expiresIn: config.jwt.refreshExpiresIn,
-  });
+  const refreshTokenOptions: SignOptions = {
+    expiresIn: config.jwt.refreshExpiresIn as SignOptions['expiresIn'],
+  };
+
+  const accessToken = jwt.sign(payload, config.jwt.secret, accessTokenOptions);
+  const refreshToken = jwt.sign({ userId: payload.userId }, config.jwt.secret, refreshTokenOptions);
 
   return { accessToken, refreshToken };
 };

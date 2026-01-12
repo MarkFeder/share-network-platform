@@ -42,6 +42,6 @@ export const config = {
   cors: {
     origin: parsed.data.CORS_ORIGIN,
   },
-} as const;
+};
 
 export type Config = typeof config;

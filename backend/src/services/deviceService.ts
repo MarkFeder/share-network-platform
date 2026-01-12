@@ -1,4 +1,5 @@
-import { PrismaClient, NetworkDevice, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+import type { NetworkDevice } from '@prisma/client';
 import { cache, keys, pubsub } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
 import {
@@ -17,11 +18,14 @@ const CACHE_TTL = 300; // 5 minutes
 
 export const deviceService = {
   async create(organizationId: string, input: DeviceInput): Promise<NetworkDevice> {
+    const { metadata, config, ...rest } = input;
     const device = await prisma.networkDevice.create({
       data: {
-        ...input,
+        ...rest,
         organizationId,
         status: DeviceStatus.UNKNOWN,
+        metadata: metadata as Prisma.InputJsonValue,
+        config: config as Prisma.InputJsonValue,
       },
     });
 
@@ -96,9 +100,14 @@ export const deviceService = {
     organizationId: string,
     input: Partial<DeviceInput>
   ): Promise<NetworkDevice> {
+    const { metadata, config, ...rest } = input;
     const device = await prisma.networkDevice.update({
       where: { id },
-      data: input,
+      data: {
+        ...rest,
+        ...(metadata !== undefined && { metadata: metadata as Prisma.InputJsonValue }),
+        ...(config !== undefined && { config: config as Prisma.InputJsonValue }),
+      },
     });
 
     await cache.del(keys.device(id));
@@ -165,8 +174,8 @@ export const deviceService = {
 
     for (const group of devices) {
       stats.total += group._count;
-      stats.byStatus[group.status] += group._count;
-      stats.byType[group.type] += group._count;
+      stats.byStatus[group.status as DeviceStatus] += group._count;
+      stats.byType[group.type as DeviceType] += group._count;
     }
 
     return stats;
@@ -186,7 +195,7 @@ export const deviceService = {
       },
     });
 
-    const nodes = devices.map((d) => ({
+    const nodes = devices.map((d: typeof devices[number]) => ({
       id: d.id,
       name: d.name,
       type: d.type,
@@ -195,8 +204,8 @@ export const deviceService = {
     }));
 
     const edges = devices
-      .filter((d) => d.parentDeviceId)
-      .map((d) => ({
+      .filter((d: typeof devices[number]) => d.parentDeviceId)
+      .map((d: typeof devices[number]) => ({
         source: d.parentDeviceId!,
         target: d.id,
       }));

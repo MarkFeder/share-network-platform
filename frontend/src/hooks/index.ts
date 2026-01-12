@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { deviceApi, telemetryApi, alertApi } from '../services/api';
@@ -31,7 +31,7 @@ export function useDeviceUpdates(organizationId: string) {
 
     socket.emit('subscribe:devices', organizationId);
 
-    socket.on('device:update', (event) => {
+    socket.on('device:update', () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['deviceStats'] });
     });
@@ -52,7 +52,7 @@ export function useTelemetryUpdates(deviceId: string) {
 
     socket.emit('subscribe:telemetry', deviceId);
 
-    socket.on('telemetry:update', (event) => {
+    socket.on('telemetry:update', () => {
       queryClient.invalidateQueries({ queryKey: ['telemetry', deviceId] });
     });
 
@@ -72,7 +72,7 @@ export function useAlertUpdates(organizationId: string) {
 
     socket.emit('subscribe:alerts', organizationId);
 
-    socket.on('alert:update', (event) => {
+    socket.on('alert:update', () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
     });
