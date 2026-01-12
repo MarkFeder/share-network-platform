@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Multi-tenant organization
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  devices NetworkDevice[]
+  alerts  Alert[]
+  apiKeys ApiKey[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole @default(VIEWER)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastLoginAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  sessions     Session[]
+  auditLogs    AuditLog[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  userAgent    String?
+  ipAddress    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  name           String
+  keyHash        String    @unique
+  organizationId String
+  permissions    String[]
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+model NetworkDevice {
+  id             String       @id @default(uuid())
+  name           String
+  type           DeviceType
+  status         DeviceStatus @default(UNKNOWN)
+  ipAddress      String?
+  macAddress     String?
+  firmwareVersion String?
+  latitude       Float?
+  longitude      Float?
+  locationName   String?
+  organizationId String
+  parentDeviceId String?
+  metadata       Json?
+  config         Json?
+  lastSeenAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  parentDevice   NetworkDevice?  @relation("DeviceHierarchy", fields: [parentDeviceId], references: [id])
+  childDevices   NetworkDevice[] @relation("DeviceHierarchy")
+  telemetryData  TelemetryData[]
+  alerts         Alert[]
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+  @@index([parentDeviceId])
+  @@map("network_devices")
+}
+
+model TelemetryData {
+  id        String   @id @default(uuid())
+  deviceId  String
+  timestamp DateTime @default(now())
+  
+  // Network metrics
+  latencyMs     Float?
+  jitterMs      Float?
+  packetLoss    Float?
+  bandwidthUp   Float?
+  bandwidthDown Float?
+  
+  // System metrics
+  cpuUsage      Float?
+  memoryUsage   Float?
+  diskUsage     Float?
+  temperature   Float?
+  
+  // Connection metrics
+  signalStrength Int?
+  connectedClients Int?
+  
+  metadata Json?
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([timestamp])
+  @@index([deviceId, timestamp])
+  @@map("telemetry_data")
+}
+
+model TelemetryAggregate {
+  id        String   @id @default(uuid())
+  deviceId  String
+  period    String   // 'hourly' | 'daily'
+  timestamp DateTime
+  
+  avgLatency     Float?
+  maxLatency     Float?
+  minLatency     Float?
+  avgPacketLoss  Float?
+  avgBandwidthUp Float?
+  avgBandwidthDown Float?
+  avgCpuUsage    Float?
+  avgMemoryUsage Float?
+  sampleCount    Int
+
+  @@unique([deviceId, period, timestamp])
+  @@index([deviceId])
+  @@index([timestamp])
+  @@map("telemetry_aggregates")
+}
+
+model Alert {
+  id             String        @id @default(uuid())
+  type           AlertType
+  severity       AlertSeverity
+  title          String
+  message        String
+  deviceId       String?
+  organizationId String
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+
+  device       NetworkDevice? @relation(fields: [deviceId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([deviceId])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  resource  String
+  resourceId String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum DeviceType {
+  ROUTER
+  ACCESS_POINT
+  GATEWAY
+  MESH_NODE
+  SWITCH
+  MODEM
+  REPEATER
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+  MAINTENANCE
+  UNKNOWN
+}
+
+enum AlertType {
+  DEVICE_OFFLINE
+  HIGH_LATENCY
+  PACKET_LOSS
+  HIGH_CPU
+  HIGH_MEMORY
+  LOW_SIGNAL
+  FIRMWARE_UPDATE
+  SECURITY
+  CUSTOM
+}
+
+enum AlertSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
