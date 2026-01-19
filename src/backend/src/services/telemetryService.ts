@@ -1,22 +1,14 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { TelemetryData } from '@prisma/client';
+import { prisma } from '../utils/prisma.js';
 import { cache, keys, pubsub } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
+import { avg, sum, max, min } from '../utils/math.js';
+import { CACHE_TTL, ALERT_THRESHOLDS, PAGINATION, CHANNELS, EVENT_TYPES } from '../config/constants.js';
+import { ValidationError } from '../middleware/errorHandler.js';
 import { TelemetryInput, AlertType, AlertSeverity } from '../types/index.js';
 
 const logger = createContextLogger('TelemetryService');
-const prisma = new PrismaClient();
-
-const CACHE_TTL = 60; // 1 minute for telemetry
-
-// Alert thresholds
-const THRESHOLDS = {
-  latencyMs: { warning: 100, critical: 500 },
-  packetLoss: { warning: 1, critical: 5 },
-  cpuUsage: { warning: 80, critical: 95 },
-  memoryUsage: { warning: 85, critical: 95 },
-  signalStrength: { warning: -70, critical: -80 },
-};
 
 export const telemetryService = {
   async ingest(input: TelemetryInput): Promise<TelemetryData> {
@@ -39,11 +31,11 @@ export const telemetryService = {
     });
 
     // Update cache with latest telemetry
-    await cache.set(keys.telemetry(input.deviceId), telemetry, CACHE_TTL);
+    await cache.set(keys.telemetry(input.deviceId), telemetry, CACHE_TTL.TELEMETRY);
 
     // Publish event
-    await pubsub.publish('telemetry:events', {
-      type: 'telemetry:received',
+    await pubsub.publish(CHANNELS.TELEMETRY_EVENTS, {
+      type: EVENT_TYPES.TELEMETRY_RECEIVED,
       payload: telemetry,
       deviceId: input.deviceId,
     });
@@ -55,8 +47,15 @@ export const telemetryService = {
   },
 
   async batchIngest(inputs: TelemetryInput[]): Promise<number> {
-    if (inputs.length > 1000) {
-      throw new Error('Batch size exceeds maximum of 1000 records');
+    if (inputs.length > PAGINATION.MAX_BATCH_SIZE) {
+      throw new ValidationError(
+        `Batch size exceeds maximum of ${PAGINATION.MAX_BATCH_SIZE} records`,
+        { maxSize: PAGINATION.MAX_BATCH_SIZE, receivedSize: inputs.length }
+      );
+    }
+
+    if (inputs.length === 0) {
+      throw new ValidationError('Batch cannot be empty');
     }
 
     const result = await prisma.telemetryData.createMany({
@@ -91,7 +90,7 @@ export const telemetryService = {
     });
 
     if (telemetry) {
-      await cache.set(keys.telemetry(deviceId), telemetry, CACHE_TTL);
+      await cache.set(keys.telemetry(deviceId), telemetry, CACHE_TTL.TELEMETRY);
     }
 
     return telemetry;
@@ -101,7 +100,7 @@ export const telemetryService = {
     deviceId: string,
     startTime: Date,
     endTime: Date,
-    limit = 1000
+    limit = PAGINATION.MAX_BATCH_SIZE
   ): Promise<TelemetryData[]> {
     return prisma.telemetryData.findMany({
       where: {
@@ -109,7 +108,7 @@ export const telemetryService = {
         timestamp: { gte: startTime, lte: endTime },
       },
       orderBy: { timestamp: 'desc' },
-      take: limit,
+      take: Math.min(limit, PAGINATION.MAX_BATCH_SIZE),
     });
   },
 
@@ -147,14 +146,14 @@ export const telemetryService = {
       deviceId,
       period,
       timestamp: startTime,
-      avgLatency: avg(data.map((d: TelemetryData) => d.latencyMs)),
-      maxLatency: max(data.map((d: TelemetryData) => d.latencyMs)),
-      minLatency: min(data.map((d: TelemetryData) => d.latencyMs)),
-      avgPacketLoss: avg(data.map((d: TelemetryData) => d.packetLoss)),
-      avgBandwidthUp: avg(data.map((d: TelemetryData) => d.bandwidthUp)),
-      avgBandwidthDown: avg(data.map((d: TelemetryData) => d.bandwidthDown)),
-      avgCpuUsage: avg(data.map((d: TelemetryData) => d.cpuUsage)),
-      avgMemoryUsage: avg(data.map((d: TelemetryData) => d.memoryUsage)),
+      avgLatency: avg(data.map((d) => d.latencyMs)),
+      maxLatency: max(data.map((d) => d.latencyMs)),
+      minLatency: min(data.map((d) => d.latencyMs)),
+      avgPacketLoss: avg(data.map((d) => d.packetLoss)),
+      avgBandwidthUp: avg(data.map((d) => d.bandwidthUp)),
+      avgBandwidthDown: avg(data.map((d) => d.bandwidthDown)),
+      avgCpuUsage: avg(data.map((d) => d.cpuUsage)),
+      avgMemoryUsage: avg(data.map((d) => d.memoryUsage)),
       sampleCount: data.length,
     };
 
@@ -182,7 +181,7 @@ export const telemetryService = {
       select: { id: true },
     });
 
-    const deviceIds = devices.map((d: typeof devices[number]) => d.id);
+    const deviceIds = devices.map((d) => d.id);
 
     const [latestTelemetry, alertCounts] = await Promise.all([
       prisma.telemetryData.findMany({
@@ -202,16 +201,16 @@ export const telemetryService = {
       }),
     ]);
 
-    const avgLatency = avg(latestTelemetry.map((t: TelemetryData) => t.latencyMs)) ?? 0;
-    const avgPacketLoss = avg(latestTelemetry.map((t: TelemetryData) => t.packetLoss)) ?? 0;
-    const totalBandwidthUp = sum(latestTelemetry.map((t: TelemetryData) => t.bandwidthUp)) ?? 0;
-    const totalBandwidthDown = sum(latestTelemetry.map((t: TelemetryData) => t.bandwidthDown)) ?? 0;
+    const avgLatency = avg(latestTelemetry.map((t) => t.latencyMs)) ?? 0;
+    const avgPacketLoss = avg(latestTelemetry.map((t) => t.packetLoss)) ?? 0;
+    const totalBandwidthUp = sum(latestTelemetry.map((t) => t.bandwidthUp)) ?? 0;
+    const totalBandwidthDown = sum(latestTelemetry.map((t) => t.bandwidthDown)) ?? 0;
 
     return {
       avgLatency,
       avgPacketLoss,
       totalBandwidth: { up: totalBandwidthUp, down: totalBandwidthDown },
-      alertCounts: Object.fromEntries(alertCounts.map((a: typeof alertCounts[number]) => [a.severity, a._count])),
+      alertCounts: Object.fromEntries(alertCounts.map((a) => [a.severity, a._count])),
       dataPoints: latestTelemetry.length,
     };
   },
@@ -225,14 +224,15 @@ export const telemetryService = {
 
     const alerts: Array<{ type: AlertType; severity: AlertSeverity; message: string }> = [];
 
+    // Check latency thresholds
     if (input.latencyMs !== undefined) {
-      if (input.latencyMs >= THRESHOLDS.latencyMs.critical) {
+      if (input.latencyMs >= ALERT_THRESHOLDS.latencyMs.critical) {
         alerts.push({
           type: AlertType.HIGH_LATENCY,
           severity: AlertSeverity.CRITICAL,
           message: `Critical latency: ${input.latencyMs}ms`,
         });
-      } else if (input.latencyMs >= THRESHOLDS.latencyMs.warning) {
+      } else if (input.latencyMs >= ALERT_THRESHOLDS.latencyMs.warning) {
         alerts.push({
           type: AlertType.HIGH_LATENCY,
           severity: AlertSeverity.HIGH,
@@ -241,14 +241,15 @@ export const telemetryService = {
       }
     }
 
+    // Check packet loss thresholds
     if (input.packetLoss !== undefined) {
-      if (input.packetLoss >= THRESHOLDS.packetLoss.critical) {
+      if (input.packetLoss >= ALERT_THRESHOLDS.packetLoss.critical) {
         alerts.push({
           type: AlertType.PACKET_LOSS,
           severity: AlertSeverity.CRITICAL,
           message: `Critical packet loss: ${input.packetLoss}%`,
         });
-      } else if (input.packetLoss >= THRESHOLDS.packetLoss.warning) {
+      } else if (input.packetLoss >= ALERT_THRESHOLDS.packetLoss.warning) {
         alerts.push({
           type: AlertType.PACKET_LOSS,
           severity: AlertSeverity.HIGH,
@@ -257,7 +258,8 @@ export const telemetryService = {
       }
     }
 
-    if (input.cpuUsage !== undefined && input.cpuUsage >= THRESHOLDS.cpuUsage.critical) {
+    // Check CPU usage threshold
+    if (input.cpuUsage !== undefined && input.cpuUsage >= ALERT_THRESHOLDS.cpuUsage.critical) {
       alerts.push({
         type: AlertType.HIGH_CPU,
         severity: AlertSeverity.CRITICAL,
@@ -265,6 +267,16 @@ export const telemetryService = {
       });
     }
 
+    // Check memory usage threshold
+    if (input.memoryUsage !== undefined && input.memoryUsage >= ALERT_THRESHOLDS.memoryUsage.critical) {
+      alerts.push({
+        type: AlertType.HIGH_MEMORY,
+        severity: AlertSeverity.CRITICAL,
+        message: `Critical memory usage: ${input.memoryUsage}%`,
+      });
+    }
+
+    // Create alerts
     for (const alert of alerts) {
       await prisma.alert.create({
         data: {
@@ -277,8 +289,8 @@ export const telemetryService = {
         },
       });
 
-      await pubsub.publish('alert:events', {
-        type: 'alert:created',
+      await pubsub.publish(CHANNELS.ALERT_EVENTS, {
+        type: EVENT_TYPES.ALERT_CREATED,
         payload: alert,
         deviceId: device.id,
         organizationId: device.organizationId,
@@ -286,24 +298,3 @@ export const telemetryService = {
     }
   },
 };
-
-// Helper functions
-function avg(values: (number | null)[]): number | null {
-  const nums = values.filter((v): v is number => v !== null);
-  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
-}
-
-function sum(values: (number | null)[]): number | null {
-  const nums = values.filter((v): v is number => v !== null);
-  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) : null;
-}
-
-function max(values: (number | null)[]): number | null {
-  const nums = values.filter((v): v is number => v !== null);
-  return nums.length > 0 ? Math.max(...nums) : null;
-}
-
-function min(values: (number | null)[]): number | null {
-  const nums = values.filter((v): v is number => v !== null);
-  return nums.length > 0 ? Math.min(...nums) : null;
-}

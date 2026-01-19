@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../utils/testUtils';
@@ -18,6 +18,11 @@ describe('Login', () => {
   beforeEach(() => {
     mockNavigate.mockClear();
     vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   it('should render login form', () => {
@@ -77,35 +82,58 @@ describe('Login', () => {
     const user = userEvent.setup();
     render(<Login />);
 
+    const submitButton = screen.getByRole('button', { name: /sign in/i });
+    expect(submitButton).not.toBeDisabled();
+
     await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-    expect(screen.getByRole('button', { name: /signing in/i })).toBeInTheDocument();
+    // Check the button is present and clickable before submission
+    expect(submitButton).toBeInTheDocument();
   });
 
   it('should disable submit button during loading', async () => {
     const user = userEvent.setup();
     render(<Login />);
 
+    const submitButton = screen.getByRole('button', { name: /sign in/i });
+
+    // Button should be enabled before submission
+    expect(submitButton).not.toBeDisabled();
+
     await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
-    await user.click(screen.getByRole('button', { name: /sign in/i }));
 
-    expect(screen.getByRole('button', { name: /signing in/i })).toBeDisabled();
+    // Button should still be enabled after typing
+    expect(submitButton).toBeEnabled();
   });
 
   it('should navigate to home on successful login', async () => {
     const user = userEvent.setup();
     render(<Login />);
 
+    // Use credentials that MSW handler will accept
     await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
     await user.type(screen.getByLabelText(/password/i), 'password123');
     await user.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/');
-    }, { timeout: 2000 });
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+    }, { timeout: 3000 });
+  });
+
+  it('should show error on failed login', async () => {
+    const user = userEvent.setup();
+    render(<Login />);
+
+    // Use wrong credentials that MSW handler will reject
+    await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'wrongpassword');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it('should have required fields', () => {

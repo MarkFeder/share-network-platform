@@ -9,6 +9,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { deviceApi, telemetryApi } from '../services/api';
 import { DeviceStatus, AlertSeverity } from '../types';
+import { PageLoader, PageHeader, Card } from '../components/common';
+import { statusColors } from '../utils';
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -52,24 +54,20 @@ export default function Dashboard() {
   ];
 
   if (statsLoading || metricsLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500">Network overview and key metrics</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Network overview and key metrics"
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
-          <div key={stat.name} className="card">
+          <Card key={stat.name}>
             <div className="flex items-center">
               <div className={`p-3 rounded-lg ${stat.color}`}>
                 <stat.icon className="w-6 h-6 text-white" />
@@ -79,13 +77,13 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Bandwidth card */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
+        <Card>
           <h3 className="text-lg font-semibold mb-4">Bandwidth Usage</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -107,21 +105,17 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-        </div>
+        </Card>
 
-        <div className="card">
+        <Card>
           <h3 className="text-lg font-semibold mb-4">Device Status</h3>
           <div className="space-y-3">
             {Object.entries(stats?.byStatus || {}).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between">
                 <div className="flex items-center">
                   <span
-                    className={`status-dot mr-2 ${
-                      status === 'ONLINE'
-                        ? 'status-online'
-                        : status === 'OFFLINE'
-                        ? 'status-offline'
-                        : 'status-degraded'
+                    className={`w-2 h-2 rounded-full mr-2 ${
+                      statusColors.dot[status as DeviceStatus] || 'bg-gray-400'
                     }`}
                   />
                   <span className="text-gray-600 capitalize">{status.toLowerCase()}</span>
@@ -130,7 +124,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

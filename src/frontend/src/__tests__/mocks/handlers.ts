@@ -4,6 +4,22 @@ import { mockDevices, mockStats, mockMetrics, mockAlerts } from '../fixtures/moc
 const API_BASE = '/api/v1';
 
 export const handlers = [
+  // Auth endpoints
+  http.post(`${API_BASE}/auth/login`, async ({ request }) => {
+    const body = await request.json() as { email: string; password: string };
+
+    // Simulate successful login for specific credentials
+    if (body.email === 'test@example.com' && body.password === 'password123') {
+      return HttpResponse.json({
+        user: { id: '1', email: body.email, name: 'Test User', role: 'ADMIN' },
+        tokens: { accessToken: 'test-token', refreshToken: 'test-refresh' },
+      });
+    }
+
+    // Simulate failed login
+    return HttpResponse.json({ message: 'Invalid credentials' }, { status: 401 });
+  }),
+
   // Device endpoints
   http.get(`${API_BASE}/devices`, () => {
     return HttpResponse.json({

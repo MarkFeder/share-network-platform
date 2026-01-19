@@ -1,7 +1,9 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { NetworkDevice } from '@prisma/client';
+import { prisma } from '../utils/prisma.js';
 import { cache, keys, pubsub } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
+import { CACHE_TTL, CHANNELS, EVENT_TYPES } from '../config/constants.js';
 import {
   DeviceInput,
   DeviceStatus,
@@ -12,9 +14,6 @@ import {
 } from '../types/index.js';
 
 const logger = createContextLogger('DeviceService');
-const prisma = new PrismaClient();
-
-const CACHE_TTL = 300; // 5 minutes
 
 export const deviceService = {
   async create(organizationId: string, input: DeviceInput): Promise<NetworkDevice> {
@@ -30,8 +29,8 @@ export const deviceService = {
     });
 
     await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish('device:events', {
-      type: 'device:registered',
+    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
+      type: EVENT_TYPES.DEVICE_REGISTERED,
       payload: { device },
       organizationId,
     });
@@ -54,7 +53,7 @@ export const deviceService = {
     });
 
     if (device) {
-      await cache.set(cacheKey, device, CACHE_TTL);
+      await cache.set(cacheKey, device, CACHE_TTL.DEVICE);
     }
 
     return device;
@@ -62,15 +61,21 @@ export const deviceService = {
 
   async list(
     organizationId: string,
-    params: PaginationParams & { type?: DeviceType; status?: DeviceStatus }
+    params: PaginationParams & { type?: DeviceType; status?: DeviceStatus; search?: string }
   ): Promise<PaginatedResponse<NetworkDevice>> {
-    const { page, limit, sortBy = 'createdAt', sortOrder = 'desc', type, status } = params;
+    const { page, limit, sortBy = 'createdAt', sortOrder = 'desc', type, status, search } = params;
     const skip = (page - 1) * limit;
 
     const where: Prisma.NetworkDeviceWhereInput = {
       organizationId,
       ...(type && { type }),
       ...(status && { status }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { ipAddress: { contains: search } },
+        ],
+      }),
     };
 
     const [devices, total] = await Promise.all([
@@ -112,8 +117,8 @@ export const deviceService = {
 
     await cache.del(keys.device(id));
     await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish('device:events', {
-      type: 'device:updated',
+    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
+      type: EVENT_TYPES.DEVICE_UPDATED,
       payload: { device },
       organizationId,
     });
@@ -127,8 +132,8 @@ export const deviceService = {
 
     await cache.del(keys.device(id));
     await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish('device:events', {
-      type: 'device:deleted',
+    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
+      type: EVENT_TYPES.DEVICE_DELETED,
       payload: { deviceId: id },
       organizationId,
     });
@@ -143,8 +148,8 @@ export const deviceService = {
     });
 
     await cache.del(keys.device(id));
-    await pubsub.publish('device:events', {
-      type: 'device:status_changed',
+    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
+      type: EVENT_TYPES.DEVICE_STATUS_CHANGED,
       payload: { deviceId: id, status },
       organizationId: device.organizationId,
     });
@@ -165,6 +170,7 @@ export const deviceService = {
       byType: {} as Record<DeviceType, number>,
     };
 
+    // Initialize all counts to zero
     for (const status of Object.values(DeviceStatus)) {
       stats.byStatus[status] = 0;
     }
@@ -172,6 +178,7 @@ export const deviceService = {
       stats.byType[type] = 0;
     }
 
+    // Aggregate counts
     for (const group of devices) {
       stats.total += group._count;
       stats.byStatus[group.status as DeviceStatus] += group._count;
@@ -195,7 +202,7 @@ export const deviceService = {
       },
     });
 
-    const nodes = devices.map((d: typeof devices[number]) => ({
+    const nodes = devices.map((d) => ({
       id: d.id,
       name: d.name,
       type: d.type,
@@ -204,8 +211,8 @@ export const deviceService = {
     }));
 
     const edges = devices
-      .filter((d: typeof devices[number]) => d.parentDeviceId)
-      .map((d: typeof devices[number]) => ({
+      .filter((d) => d.parentDeviceId)
+      .map((d) => ({
         source: d.parentDeviceId!,
         target: d.id,
       }));

@@ -3,10 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { deviceApi } from '../services/api';
 import { DeviceStatus, DeviceType } from '../types';
-import clsx from 'clsx';
+import {
+  LoadingSpinner,
+  PageHeader,
+  Card,
+  StatusBadge,
+  DeviceTypeBadge,
+} from '../components/common';
+import { PAGINATION } from '../utils';
 
 export default function Devices() {
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState<number>(PAGINATION.DEFAULT_PAGE);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
@@ -16,38 +23,29 @@ export default function Devices() {
     queryFn: () =>
       deviceApi.list({
         page,
-        limit: 10,
+        limit: PAGINATION.DEFAULT_LIMIT / 2, // 10 items per page
         status: statusFilter || undefined,
         type: typeFilter || undefined,
       }),
   });
 
-  const getStatusBadge = (status: DeviceStatus) => {
-    const styles = {
-      [DeviceStatus.ONLINE]: 'badge-success',
-      [DeviceStatus.OFFLINE]: 'badge-danger',
-      [DeviceStatus.DEGRADED]: 'badge-warning',
-      [DeviceStatus.MAINTENANCE]: 'badge-info',
-      [DeviceStatus.UNKNOWN]: 'bg-gray-100 text-gray-800',
-    };
-    return styles[status] || 'bg-gray-100 text-gray-800';
-  };
+  const addDeviceButton = (
+    <button className="btn-primary">
+      <PlusIcon className="w-5 h-5 mr-2" />
+      Add Device
+    </button>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Devices</h1>
-          <p className="text-gray-500">Manage your network devices</p>
-        </div>
-        <button className="btn-primary">
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Add Device
-        </button>
-      </div>
+      <PageHeader
+        title="Devices"
+        description="Manage your network devices"
+        actions={addDeviceButton}
+      />
 
       {/* Filters */}
-      <div className="card">
+      <Card>
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -84,13 +82,13 @@ export default function Devices() {
             ))}
           </select>
         </div>
-      </div>
+      </Card>
 
       {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            <LoadingSpinner size="lg" />
           </div>
         ) : (
           <>
@@ -111,13 +109,11 @@ export default function Devices() {
                   {data?.data.map((device) => (
                     <tr key={device.id}>
                       <td className="font-medium">{device.name}</td>
-                      <td className="text-gray-500">
-                        {device.type.replace('_', ' ')}
+                      <td>
+                        <DeviceTypeBadge type={device.type} />
                       </td>
                       <td>
-                        <span className={clsx('badge', getStatusBadge(device.status))}>
-                          {device.status}
-                        </span>
+                        <StatusBadge status={device.status} />
                       </td>
                       <td className="text-gray-500 font-mono text-xs">
                         {device.ipAddress || '-'}
@@ -167,7 +163,7 @@ export default function Devices() {
             )}
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

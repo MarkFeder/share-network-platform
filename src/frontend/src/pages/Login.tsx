@@ -1,12 +1,30 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts';
+import { ROUTES } from '../utils/constants';
+import { LoadingSpinner } from '../components/common';
+
+interface LocationState {
+  from?: { pathname: string };
+}
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    const state = location.state as LocationState;
+    const from = state?.from?.pathname || ROUTES.HOME;
+    navigate(from, { replace: true });
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,12 +32,14 @@ export default function Login() {
     setError('');
 
     try {
-      // TODO: Implement actual login
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      localStorage.setItem('accessToken', 'demo-token');
-      navigate('/');
-    } catch {
-      setError('Invalid email or password');
+      await login(email, password);
+
+      // Navigate to the original destination or home
+      const state = location.state as LocationState;
+      const from = state?.from?.pathname || ROUTES.HOME;
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +94,7 @@ export default function Login() {
                 autoComplete="current-password"
                 required
                 className="input mt-1"
-                placeholder="••••••••"
+                placeholder="********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -102,9 +122,16 @@ export default function Login() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full btn-primary py-3"
+            className="w-full btn-primary py-3 flex items-center justify-center"
           >
-            {isLoading ? 'Signing in...' : 'Sign in'}
+            {isLoading ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                Signing in...
+              </>
+            ) : (
+              'Sign in'
+            )}
           </button>
         </form>
       </div>

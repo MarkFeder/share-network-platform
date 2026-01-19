@@ -3,6 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { alertApi } from '../services/api';
 import { AlertSeverity } from '../types';
+import {
+  LoadingSpinner,
+  PageHeader,
+  Card,
+  SeverityBadge,
+  EmptyState,
+} from '../components/common';
+import { severityColors } from '../utils';
 import clsx from 'clsx';
 
 export default function Alerts() {
@@ -13,26 +21,15 @@ export default function Alerts() {
     queryFn: () => alertApi.list({ severity: severityFilter || undefined }),
   });
 
-  const getSeverityBadge = (severity: AlertSeverity) => {
-    const styles = {
-      [AlertSeverity.CRITICAL]: 'bg-red-100 text-red-800',
-      [AlertSeverity.HIGH]: 'bg-orange-100 text-orange-800',
-      [AlertSeverity.MEDIUM]: 'bg-yellow-100 text-yellow-800',
-      [AlertSeverity.LOW]: 'bg-blue-100 text-blue-800',
-      [AlertSeverity.INFO]: 'bg-gray-100 text-gray-800',
-    };
-    return styles[severity];
-  };
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Alerts</h1>
-        <p className="text-gray-500">Monitor and manage system alerts</p>
-      </div>
+      <PageHeader
+        title="Alerts"
+        description="Monitor and manage system alerts"
+      />
 
       {/* Filters */}
-      <div className="card">
+      <Card>
         <div className="flex flex-col sm:flex-row gap-4">
           <select
             className="input w-full sm:w-48"
@@ -47,38 +44,33 @@ export default function Alerts() {
             ))}
           </select>
         </div>
-      </div>
+      </Card>
 
       {/* Alerts list */}
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+          <LoadingSpinner size="lg" />
         </div>
       ) : (
         <div className="space-y-4">
           {data?.data.length === 0 ? (
-            <div className="card text-center text-gray-500 py-12">
-              No alerts found
-            </div>
+            <EmptyState
+              title="No alerts"
+              description="There are no alerts matching your criteria"
+            />
           ) : (
             data?.data.map((alert) => (
-              <div
+              <Card
                 key={alert.id}
                 className={clsx(
-                  'card border-l-4',
-                  alert.severity === AlertSeverity.CRITICAL && 'border-l-red-500',
-                  alert.severity === AlertSeverity.HIGH && 'border-l-orange-500',
-                  alert.severity === AlertSeverity.MEDIUM && 'border-l-yellow-500',
-                  alert.severity === AlertSeverity.LOW && 'border-l-blue-500',
-                  alert.severity === AlertSeverity.INFO && 'border-l-gray-500'
+                  'border-l-4',
+                  severityColors.border[alert.severity]
                 )}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={clsx('badge', getSeverityBadge(alert.severity))}>
-                        {alert.severity}
-                      </span>
+                      <SeverityBadge severity={alert.severity} />
                       <span className="text-sm text-gray-500">
                         {new Date(alert.createdAt).toLocaleString()}
                       </span>
@@ -108,7 +100,7 @@ export default function Alerts() {
                     Acknowledged at {new Date(alert.acknowledgedAt).toLocaleString()}
                   </p>
                 )}
-              </div>
+              </Card>
             ))
           )}
         </div>

@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { deviceApi, telemetryApi } from '../services/api';
+import {
+  LoadingSpinner,
+  PageHeader,
+  Card,
+  EmptyState,
+} from '../components/common';
+import {
+  getMetricStatus,
+  getSignalStatus,
+  MetricStatus,
+  ALERT_THRESHOLDS,
+} from '../utils';
 
 export default function Telemetry() {
   const [selectedDevice, setSelectedDevice] = useState<string>('');
@@ -19,13 +31,13 @@ export default function Telemetry() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Telemetry</h1>
-        <p className="text-gray-500">Real-time device metrics and analytics</p>
-      </div>
+      <PageHeader
+        title="Telemetry"
+        description="Real-time device metrics and analytics"
+      />
 
       {/* Filters */}
-      <div className="card">
+      <Card>
         <div className="flex flex-col sm:flex-row gap-4">
           <select
             className="input flex-1"
@@ -50,13 +62,13 @@ export default function Telemetry() {
             <option value="7d">Last 7 Days</option>
           </select>
         </div>
-      </div>
+      </Card>
 
       {/* Metrics */}
       {selectedDevice ? (
         isLoading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            <LoadingSpinner size="lg" />
           </div>
         ) : telemetry ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -64,25 +76,25 @@ export default function Telemetry() {
               title="Latency"
               value={telemetry.latencyMs?.toFixed(1) ?? '-'}
               unit="ms"
-              status={getMetricStatus(telemetry.latencyMs, 100, 500)}
+              status={telemetry.latencyMs ? getMetricStatus(telemetry.latencyMs, ALERT_THRESHOLDS.latencyMs) : undefined}
             />
             <MetricCard
               title="Packet Loss"
               value={telemetry.packetLoss?.toFixed(2) ?? '-'}
               unit="%"
-              status={getMetricStatus(telemetry.packetLoss, 1, 5)}
+              status={telemetry.packetLoss ? getMetricStatus(telemetry.packetLoss, ALERT_THRESHOLDS.packetLoss) : undefined}
             />
             <MetricCard
               title="CPU Usage"
               value={telemetry.cpuUsage?.toFixed(1) ?? '-'}
               unit="%"
-              status={getMetricStatus(telemetry.cpuUsage, 80, 95)}
+              status={telemetry.cpuUsage ? getMetricStatus(telemetry.cpuUsage, ALERT_THRESHOLDS.cpuUsage) : undefined}
             />
             <MetricCard
               title="Memory Usage"
               value={telemetry.memoryUsage?.toFixed(1) ?? '-'}
               unit="%"
-              status={getMetricStatus(telemetry.memoryUsage, 85, 95)}
+              status={telemetry.memoryUsage ? getMetricStatus(telemetry.memoryUsage, ALERT_THRESHOLDS.memoryUsage) : undefined}
             />
             <MetricCard
               title="Bandwidth Up"
@@ -98,7 +110,7 @@ export default function Telemetry() {
               title="Signal Strength"
               value={telemetry.signalStrength ?? '-'}
               unit="dBm"
-              status={getSignalStatus(telemetry.signalStrength)}
+              status={telemetry.signalStrength ? getSignalStatus(telemetry.signalStrength) : undefined}
             />
             <MetricCard
               title="Connected Clients"
@@ -107,14 +119,16 @@ export default function Telemetry() {
             />
           </div>
         ) : (
-          <div className="card text-center text-gray-500 py-12">
-            No telemetry data available
-          </div>
+          <EmptyState
+            title="No telemetry data"
+            description="No telemetry data available for this device"
+          />
         )
       ) : (
-        <div className="card text-center text-gray-500 py-12">
-          Select a device to view telemetry data
-        </div>
+        <EmptyState
+          title="Select a device"
+          description="Select a device to view telemetry data"
+        />
       )}
     </div>
   );
@@ -129,39 +143,21 @@ function MetricCard({
   title: string;
   value: string | number;
   unit: string;
-  status?: 'good' | 'warning' | 'critical';
+  status?: MetricStatus;
 }) {
-  const statusColors = {
+  const statusTextColors: Record<MetricStatus, string> = {
     good: 'text-green-600',
     warning: 'text-yellow-600',
     critical: 'text-red-600',
   };
 
   return (
-    <div className="card">
+    <Card>
       <p className="text-sm text-gray-500">{title}</p>
-      <p className={`text-3xl font-bold ${status ? statusColors[status] : 'text-gray-900'}`}>
+      <p className={`text-3xl font-bold ${status ? statusTextColors[status] : 'text-gray-900'}`}>
         {value}
         <span className="text-lg font-normal text-gray-500 ml-1">{unit}</span>
       </p>
-    </div>
+    </Card>
   );
-}
-
-function getMetricStatus(
-  value: number | undefined,
-  warningThreshold: number,
-  criticalThreshold: number
-): 'good' | 'warning' | 'critical' | undefined {
-  if (value === undefined) return undefined;
-  if (value >= criticalThreshold) return 'critical';
-  if (value >= warningThreshold) return 'warning';
-  return 'good';
-}
-
-function getSignalStatus(value: number | undefined): 'good' | 'warning' | 'critical' | undefined {
-  if (value === undefined) return undefined;
-  if (value <= -80) return 'critical';
-  if (value <= -70) return 'warning';
-  return 'good';
 }
