@@ -4,8 +4,8 @@
   "description": "Network Telemetry & ISP Management Platform - Full-stack infrastructure monitoring solution",
   "private": true,
   "workspaces": [
-    "backend",
-    "frontend"
+    "src/backend",
+    "src/frontend"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -25,7 +25,7 @@
     "prisma:migrate": "npm run prisma:migrate --workspace=backend",
     "prisma:studio": "npm run prisma:studio --workspace=backend",
     "db:seed": "npm run seed --workspace=backend",
-    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules backend/dist frontend/dist"
+    "clean": "rm -rf node_modules src/backend/node_modules src/frontend/node_modules src/backend/dist src/frontend/dist"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
