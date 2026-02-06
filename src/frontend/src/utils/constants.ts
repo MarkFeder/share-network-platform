@@ -38,6 +38,15 @@ export const STORAGE_KEYS = {
   THEME: 'theme',
 } as const;
 
+// Query keys for React Query
+export const QUERY_KEYS = {
+  DEVICES: 'devices',
+  DEVICE_STATS: 'deviceStats',
+  TELEMETRY: 'telemetry',
+  DASHBOARD_METRICS: 'dashboardMetrics',
+  ALERTS: 'alerts',
+} as const;
+
 // Routes
 export const ROUTES = {
   HOME: '/',

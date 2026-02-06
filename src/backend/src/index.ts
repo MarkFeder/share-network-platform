@@ -7,6 +7,7 @@ import { Server as SocketServer } from 'socket.io';
 import { collectDefaultMetrics, Registry, Counter, Histogram } from 'prom-client';
 
 import { config } from './config/index.js';
+import { RATE_LIMITS, CHANNELS, SOCKET_ROOMS } from './config/constants.js';
 import { logger } from './utils/logger.js';
 import { redis, redisSub, closeRedis } from './utils/redis.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -52,8 +53,8 @@ app.use(cors({ origin: config.cors.origin }));
 app.use(express.json({ limit: '10mb' }));
 app.use(
   rateLimit({
-    windowMs: 60 * 1000,
-    max: 100,
+    windowMs: RATE_LIMITS.WINDOW_MS,
+    max: RATE_LIMITS.MAX_REQUESTS,
     message: { error: 'Too many requests' },
   })
 );
@@ -88,15 +89,15 @@ io.on('connection', (socket) => {
   logger.info('Client connected', { socketId: socket.id });
 
   socket.on('subscribe:devices', (organizationId: string) => {
-    socket.join(`org:${organizationId}:devices`);
+    socket.join(SOCKET_ROOMS.orgDevices(organizationId));
   });
 
   socket.on('subscribe:telemetry', (deviceId: string) => {
-    socket.join(`device:${deviceId}:telemetry`);
+    socket.join(SOCKET_ROOMS.deviceTelemetry(deviceId));
   });
 
   socket.on('subscribe:alerts', (organizationId: string) => {
-    socket.join(`org:${organizationId}:alerts`);
+    socket.join(SOCKET_ROOMS.orgAlerts(organizationId));
   });
 
   socket.on('disconnect', () => {
@@ -105,20 +106,20 @@ io.on('connection', (socket) => {
 });
 
 // Redis pub/sub for real-time events
-redisSub.subscribe('device:events', 'telemetry:events', 'alert:events');
+redisSub.subscribe(CHANNELS.DEVICE_EVENTS, CHANNELS.TELEMETRY_EVENTS, CHANNELS.ALERT_EVENTS);
 redisSub.on('message', (channel, message) => {
   try {
     const event = JSON.parse(message);
 
     switch (channel) {
-      case 'device:events':
-        io.to(`org:${event.organizationId}:devices`).emit('device:update', event);
+      case CHANNELS.DEVICE_EVENTS:
+        io.to(SOCKET_ROOMS.orgDevices(event.organizationId)).emit('device:update', event);
         break;
-      case 'telemetry:events':
-        io.to(`device:${event.deviceId}:telemetry`).emit('telemetry:update', event);
+      case CHANNELS.TELEMETRY_EVENTS:
+        io.to(SOCKET_ROOMS.deviceTelemetry(event.deviceId)).emit('telemetry:update', event);
         break;
-      case 'alert:events':
-        io.to(`org:${event.organizationId}:alerts`).emit('alert:update', event);
+      case CHANNELS.ALERT_EVENTS:
+        io.to(SOCKET_ROOMS.orgAlerts(event.organizationId)).emit('alert:update', event);
         break;
     }
   } catch (error) {

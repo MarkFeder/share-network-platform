@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { deviceApi, telemetryApi, alertApi } from '../services/api';
+import { REFRESH_INTERVALS, QUERY_KEYS } from '../utils/constants';
 
 // Socket connection hook
 export function useSocket() {
@@ -32,8 +33,8 @@ export function useDeviceUpdates(organizationId: string) {
     socket.emit('subscribe:devices', organizationId);
 
     socket.on('device:update', () => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-      queryClient.invalidateQueries({ queryKey: ['deviceStats'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DEVICES] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DEVICE_STATS] });
     });
 
     return () => {
@@ -53,7 +54,7 @@ export function useTelemetryUpdates(deviceId: string) {
     socket.emit('subscribe:telemetry', deviceId);
 
     socket.on('telemetry:update', () => {
-      queryClient.invalidateQueries({ queryKey: ['telemetry', deviceId] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.TELEMETRY, deviceId] });
     });
 
     return () => {
@@ -73,8 +74,8 @@ export function useAlertUpdates(organizationId: string) {
     socket.emit('subscribe:alerts', organizationId);
 
     socket.on('alert:update', () => {
-      queryClient.invalidateQueries({ queryKey: ['alerts'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.ALERTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.DASHBOARD_METRICS] });
     });
 
     return () => {
@@ -91,7 +92,7 @@ export function useDevices(params?: {
   status?: string;
 }) {
   return useQuery({
-    queryKey: ['devices', params],
+    queryKey: [QUERY_KEYS.DEVICES, params],
     queryFn: () => deviceApi.list(params),
   });
 }
@@ -99,7 +100,7 @@ export function useDevices(params?: {
 // Device stats hook
 export function useDeviceStats() {
   return useQuery({
-    queryKey: ['deviceStats'],
+    queryKey: [QUERY_KEYS.DEVICE_STATS],
     queryFn: deviceApi.getStats,
   });
 }
@@ -107,26 +108,26 @@ export function useDeviceStats() {
 // Telemetry hook
 export function useTelemetry(deviceId: string) {
   return useQuery({
-    queryKey: ['telemetry', deviceId],
+    queryKey: [QUERY_KEYS.TELEMETRY, deviceId],
     queryFn: () => telemetryApi.getLatest(deviceId),
     enabled: !!deviceId,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: REFRESH_INTERVALS.TELEMETRY,
   });
 }
 
 // Dashboard metrics hook
 export function useDashboardMetrics() {
   return useQuery({
-    queryKey: ['dashboardMetrics'],
+    queryKey: [QUERY_KEYS.DASHBOARD_METRICS],
     queryFn: telemetryApi.getDashboard,
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: REFRESH_INTERVALS.DASHBOARD,
   });
 }
 
 // Alerts hook
 export function useAlerts(params?: { severity?: string }) {
   return useQuery({
-    queryKey: ['alerts', params],
+    queryKey: [QUERY_KEYS.ALERTS, params],
     queryFn: () => alertApi.list(params),
   });
 }
@@ -147,9 +148,6 @@ export function useDebounce<T>(value: T, delay: number): T {
 
   return debouncedValue;
 }
-
-// Import useState for useDebounce
-import { useState } from 'react';
 
 // Interval hook
 export function useInterval(callback: () => void, delay: number | null) {

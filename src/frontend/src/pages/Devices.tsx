@@ -1,15 +1,14 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import { deviceApi } from '../services/api';
 import { DeviceStatus, DeviceType } from '../types';
 import {
-  LoadingSpinner,
+  PageLoader,
   PageHeader,
   Card,
   StatusBadge,
   DeviceTypeBadge,
 } from '../components/common';
+import { useDevices } from '../hooks';
 import { PAGINATION } from '../utils';
 
 export default function Devices() {
@@ -18,15 +17,11 @@ export default function Devices() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['devices', page, statusFilter, typeFilter],
-    queryFn: () =>
-      deviceApi.list({
-        page,
-        limit: PAGINATION.DEFAULT_LIMIT / 2, // 10 items per page
-        status: statusFilter || undefined,
-        type: typeFilter || undefined,
-      }),
+  const { data, isLoading } = useDevices({
+    page,
+    limit: PAGINATION.DEFAULT_LIMIT / 2,
+    status: statusFilter || undefined,
+    type: typeFilter || undefined,
   });
 
   const addDeviceButton = (
@@ -87,9 +82,7 @@ export default function Devices() {
       {/* Table */}
       <Card className="p-0 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <LoadingSpinner size="lg" />
-          </div>
+          <PageLoader />
         ) : (
           <>
             <div className="table-container">

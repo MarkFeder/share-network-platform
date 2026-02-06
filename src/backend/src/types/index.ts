@@ -125,20 +125,3 @@ export interface DashboardMetrics {
     createdAt: Date;
   }>;
 }
-
-export type EventType =
-  | 'device:registered'
-  | 'device:updated'
-  | 'device:deleted'
-  | 'device:status_changed'
-  | 'telemetry:received'
-  | 'alert:created'
-  | 'alert:acknowledged'
-  | 'alert:resolved';
-
-export interface SystemEvent {
-  type: EventType;
-  payload: Record<string, unknown>;
-  timestamp: Date;
-  organizationId: string;
-}

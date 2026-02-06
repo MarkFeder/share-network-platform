@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { alertApi } from '../services/api';
 import { AlertSeverity } from '../types';
 import {
-  LoadingSpinner,
+  PageLoader,
   PageHeader,
   Card,
   SeverityBadge,
   EmptyState,
 } from '../components/common';
+import { useAlerts } from '../hooks';
 import { severityColors } from '../utils';
 import clsx from 'clsx';
 
 export default function Alerts() {
   const [severityFilter, setSeverityFilter] = useState<string>('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['alerts', severityFilter],
-    queryFn: () => alertApi.list({ severity: severityFilter || undefined }),
+  const { data, isLoading } = useAlerts({
+    severity: severityFilter || undefined,
   });
 
   return (
@@ -48,9 +46,7 @@ export default function Alerts() {
 
       {/* Alerts list */}
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <LoadingSpinner size="lg" />
-        </div>
+        <PageLoader />
       ) : (
         <div className="space-y-4">
           {data?.data.length === 0 ? (

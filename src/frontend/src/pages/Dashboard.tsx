@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import {
   ArrowUpIcon,
   ArrowDownIcon,
@@ -7,21 +6,14 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { deviceApi, telemetryApi } from '../services/api';
 import { DeviceStatus, AlertSeverity } from '../types';
 import { PageLoader, PageHeader, Card } from '../components/common';
+import { useDeviceStats, useDashboardMetrics } from '../hooks';
 import { statusColors } from '../utils';
 
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['deviceStats'],
-    queryFn: deviceApi.getStats,
-  });
-
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
-    queryKey: ['dashboardMetrics'],
-    queryFn: telemetryApi.getDashboard,
-  });
+  const { data: stats, isLoading: statsLoading } = useDeviceStats();
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics();
 
   const statCards = [
     {

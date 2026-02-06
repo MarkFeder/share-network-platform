@@ -15,6 +15,15 @@ import {
 
 const logger = createContextLogger('DeviceService');
 
+async function invalidateDeviceCache(id: string, orgId: string) {
+  await cache.del(keys.device(id));
+  await cache.invalidatePattern(keys.deviceList(orgId) + '*');
+}
+
+async function publishDeviceEvent(type: string, payload: Record<string, unknown>, orgId: string) {
+  await pubsub.publish(CHANNELS.DEVICE_EVENTS, { type, payload, organizationId: orgId });
+}
+
 export const deviceService = {
   async create(organizationId: string, input: DeviceInput): Promise<NetworkDevice> {
     const { metadata, config, ...rest } = input;
@@ -28,12 +37,8 @@ export const deviceService = {
       },
     });
 
-    await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
-      type: EVENT_TYPES.DEVICE_REGISTERED,
-      payload: { device },
-      organizationId,
-    });
+    await invalidateDeviceCache(device.id, organizationId);
+    await publishDeviceEvent(EVENT_TYPES.DEVICE_REGISTERED, { device }, organizationId);
 
     logger.info('Device created', { deviceId: device.id, name: device.name });
     return device;
@@ -115,13 +120,8 @@ export const deviceService = {
       },
     });
 
-    await cache.del(keys.device(id));
-    await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
-      type: EVENT_TYPES.DEVICE_UPDATED,
-      payload: { device },
-      organizationId,
-    });
+    await invalidateDeviceCache(id, organizationId);
+    await publishDeviceEvent(EVENT_TYPES.DEVICE_UPDATED, { device }, organizationId);
 
     logger.info('Device updated', { deviceId: id });
     return device;
@@ -130,13 +130,8 @@ export const deviceService = {
   async delete(id: string, organizationId: string): Promise<void> {
     await prisma.networkDevice.delete({ where: { id } });
 
-    await cache.del(keys.device(id));
-    await cache.invalidatePattern(keys.deviceList(organizationId) + '*');
-    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
-      type: EVENT_TYPES.DEVICE_DELETED,
-      payload: { deviceId: id },
-      organizationId,
-    });
+    await invalidateDeviceCache(id, organizationId);
+    await publishDeviceEvent(EVENT_TYPES.DEVICE_DELETED, { deviceId: id }, organizationId);
 
     logger.info('Device deleted', { deviceId: id });
   },
@@ -147,12 +142,8 @@ export const deviceService = {
       data: { status, lastSeenAt: status === DeviceStatus.ONLINE ? new Date() : undefined },
     });
 
-    await cache.del(keys.device(id));
-    await pubsub.publish(CHANNELS.DEVICE_EVENTS, {
-      type: EVENT_TYPES.DEVICE_STATUS_CHANGED,
-      payload: { deviceId: id, status },
-      organizationId: device.organizationId,
-    });
+    await invalidateDeviceCache(id, device.organizationId);
+    await publishDeviceEvent(EVENT_TYPES.DEVICE_STATUS_CHANGED, { deviceId: id, status }, device.organizationId);
 
     return device;
   },

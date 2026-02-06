@@ -103,6 +103,12 @@ export const metricStatusColors: Record<MetricStatus, { bg: string; text: string
   critical: { bg: 'bg-red-100', text: 'text-red-800' },
 };
 
+export const metricStatusTextColors: Record<MetricStatus, string> = {
+  good: 'text-green-600',
+  warning: 'text-yellow-600',
+  critical: 'text-red-600',
+};
+
 // Signal strength helper (returns status based on dBm)
 export function getSignalStatus(dbm: number): MetricStatus {
   if (dbm >= -50) return 'good';

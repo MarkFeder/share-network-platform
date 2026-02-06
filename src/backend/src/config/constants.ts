@@ -53,5 +53,18 @@ export const EVENT_TYPES = {
   ALERT_RESOLVED: 'alert:resolved',
 } as const;
 
+// Time duration constants (in milliseconds)
+export const DURATION_MS = {
+  HOUR: 3600000,
+  DAY: 86400000,
+} as const;
+
+// Socket room name helpers
+export const SOCKET_ROOMS = {
+  orgDevices: (orgId: string) => `org:${orgId}:devices`,
+  deviceTelemetry: (deviceId: string) => `device:${deviceId}:telemetry`,
+  orgAlerts: (orgId: string) => `org:${orgId}:alerts`,
+} as const;
+
 export type Channel = typeof CHANNELS[keyof typeof CHANNELS];
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];

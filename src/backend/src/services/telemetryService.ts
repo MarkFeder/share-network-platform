@@ -4,30 +4,51 @@ import { prisma } from '../utils/prisma.js';
 import { cache, keys, pubsub } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
 import { avg, sum, max, min } from '../utils/math.js';
-import { CACHE_TTL, ALERT_THRESHOLDS, PAGINATION, CHANNELS, EVENT_TYPES } from '../config/constants.js';
+import { CACHE_TTL, ALERT_THRESHOLDS, PAGINATION, CHANNELS, EVENT_TYPES, DURATION_MS } from '../config/constants.js';
 import { ValidationError } from '../middleware/errorHandler.js';
 import { TelemetryInput, AlertType, AlertSeverity } from '../types/index.js';
 
 const logger = createContextLogger('TelemetryService');
 
+function mapTelemetryInput(input: TelemetryInput) {
+  return {
+    deviceId: input.deviceId,
+    latencyMs: input.latencyMs,
+    jitterMs: input.jitterMs,
+    packetLoss: input.packetLoss,
+    bandwidthUp: input.bandwidthUp,
+    bandwidthDown: input.bandwidthDown,
+    cpuUsage: input.cpuUsage,
+    memoryUsage: input.memoryUsage,
+    diskUsage: input.diskUsage,
+    temperature: input.temperature,
+    signalStrength: input.signalStrength,
+    connectedClients: input.connectedClients,
+    metadata: input.metadata as Prisma.InputJsonValue,
+  };
+}
+
+function checkMetricThreshold(
+  value: number | undefined,
+  thresholds: { warning: number; critical: number },
+  alertType: AlertType,
+  metricLabel: string,
+  unit: string,
+): Array<{ type: AlertType; severity: AlertSeverity; message: string }> {
+  if (value === undefined) return [];
+  if (value >= thresholds.critical) {
+    return [{ type: alertType, severity: AlertSeverity.CRITICAL, message: `Critical ${metricLabel}: ${value}${unit}` }];
+  }
+  if (value >= thresholds.warning) {
+    return [{ type: alertType, severity: AlertSeverity.HIGH, message: `High ${metricLabel}: ${value}${unit}` }];
+  }
+  return [];
+}
+
 export const telemetryService = {
   async ingest(input: TelemetryInput): Promise<TelemetryData> {
     const telemetry = await prisma.telemetryData.create({
-      data: {
-        deviceId: input.deviceId,
-        latencyMs: input.latencyMs,
-        jitterMs: input.jitterMs,
-        packetLoss: input.packetLoss,
-        bandwidthUp: input.bandwidthUp,
-        bandwidthDown: input.bandwidthDown,
-        cpuUsage: input.cpuUsage,
-        memoryUsage: input.memoryUsage,
-        diskUsage: input.diskUsage,
-        temperature: input.temperature,
-        signalStrength: input.signalStrength,
-        connectedClients: input.connectedClients,
-        metadata: input.metadata as Prisma.InputJsonValue,
-      },
+      data: mapTelemetryInput(input),
     });
 
     // Update cache with latest telemetry
@@ -59,21 +80,7 @@ export const telemetryService = {
     }
 
     const result = await prisma.telemetryData.createMany({
-      data: inputs.map((input) => ({
-        deviceId: input.deviceId,
-        latencyMs: input.latencyMs,
-        jitterMs: input.jitterMs,
-        packetLoss: input.packetLoss,
-        bandwidthUp: input.bandwidthUp,
-        bandwidthDown: input.bandwidthDown,
-        cpuUsage: input.cpuUsage,
-        memoryUsage: input.memoryUsage,
-        diskUsage: input.diskUsage,
-        temperature: input.temperature,
-        signalStrength: input.signalStrength,
-        connectedClients: input.connectedClients,
-        metadata: input.metadata as Prisma.InputJsonValue,
-      })),
+      data: inputs.map(mapTelemetryInput),
     });
 
     logger.info('Batch telemetry ingested', { count: result.count });
@@ -130,7 +137,7 @@ export const telemetryService = {
 
   async createAggregates(deviceId: string, period: 'hourly' | 'daily'): Promise<void> {
     const now = new Date();
-    const periodMs = period === 'hourly' ? 3600000 : 86400000;
+    const periodMs = period === 'hourly' ? DURATION_MS.HOUR : DURATION_MS.DAY;
     const startTime = new Date(now.getTime() - periodMs);
 
     const data = await prisma.telemetryData.findMany({
@@ -174,7 +181,7 @@ export const telemetryService = {
 
   async getDashboardMetrics(organizationId: string) {
     const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 3600000);
+    const oneHourAgo = new Date(now.getTime() - DURATION_MS.HOUR);
 
     const devices = await prisma.networkDevice.findMany({
       where: { organizationId },
@@ -222,59 +229,12 @@ export const telemetryService = {
 
     if (!device) return;
 
-    const alerts: Array<{ type: AlertType; severity: AlertSeverity; message: string }> = [];
-
-    // Check latency thresholds
-    if (input.latencyMs !== undefined) {
-      if (input.latencyMs >= ALERT_THRESHOLDS.latencyMs.critical) {
-        alerts.push({
-          type: AlertType.HIGH_LATENCY,
-          severity: AlertSeverity.CRITICAL,
-          message: `Critical latency: ${input.latencyMs}ms`,
-        });
-      } else if (input.latencyMs >= ALERT_THRESHOLDS.latencyMs.warning) {
-        alerts.push({
-          type: AlertType.HIGH_LATENCY,
-          severity: AlertSeverity.HIGH,
-          message: `High latency: ${input.latencyMs}ms`,
-        });
-      }
-    }
-
-    // Check packet loss thresholds
-    if (input.packetLoss !== undefined) {
-      if (input.packetLoss >= ALERT_THRESHOLDS.packetLoss.critical) {
-        alerts.push({
-          type: AlertType.PACKET_LOSS,
-          severity: AlertSeverity.CRITICAL,
-          message: `Critical packet loss: ${input.packetLoss}%`,
-        });
-      } else if (input.packetLoss >= ALERT_THRESHOLDS.packetLoss.warning) {
-        alerts.push({
-          type: AlertType.PACKET_LOSS,
-          severity: AlertSeverity.HIGH,
-          message: `High packet loss: ${input.packetLoss}%`,
-        });
-      }
-    }
-
-    // Check CPU usage threshold
-    if (input.cpuUsage !== undefined && input.cpuUsage >= ALERT_THRESHOLDS.cpuUsage.critical) {
-      alerts.push({
-        type: AlertType.HIGH_CPU,
-        severity: AlertSeverity.CRITICAL,
-        message: `Critical CPU usage: ${input.cpuUsage}%`,
-      });
-    }
-
-    // Check memory usage threshold
-    if (input.memoryUsage !== undefined && input.memoryUsage >= ALERT_THRESHOLDS.memoryUsage.critical) {
-      alerts.push({
-        type: AlertType.HIGH_MEMORY,
-        severity: AlertSeverity.CRITICAL,
-        message: `Critical memory usage: ${input.memoryUsage}%`,
-      });
-    }
+    const alerts: Array<{ type: AlertType; severity: AlertSeverity; message: string }> = [
+      ...checkMetricThreshold(input.latencyMs, ALERT_THRESHOLDS.latencyMs, AlertType.HIGH_LATENCY, 'latency', 'ms'),
+      ...checkMetricThreshold(input.packetLoss, ALERT_THRESHOLDS.packetLoss, AlertType.PACKET_LOSS, 'packet loss', '%'),
+      ...checkMetricThreshold(input.cpuUsage, ALERT_THRESHOLDS.cpuUsage, AlertType.HIGH_CPU, 'CPU usage', '%'),
+      ...checkMetricThreshold(input.memoryUsage, ALERT_THRESHOLDS.memoryUsage, AlertType.HIGH_MEMORY, 'memory usage', '%'),
+    ];
 
     // Create alerts
     for (const alert of alerts) {

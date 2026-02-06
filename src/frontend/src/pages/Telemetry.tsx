@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { deviceApi, telemetryApi } from '../services/api';
 import {
-  LoadingSpinner,
+  PageLoader,
   PageHeader,
   Card,
   EmptyState,
+  MetricCard,
 } from '../components/common';
+import { useDevices, useTelemetry } from '../hooks';
 import {
   getMetricStatus,
   getSignalStatus,
-  MetricStatus,
   ALERT_THRESHOLDS,
 } from '../utils';
 
@@ -18,16 +17,8 @@ export default function Telemetry() {
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [timeRange, setTimeRange] = useState<string>('1h');
 
-  const { data: devices } = useQuery({
-    queryKey: ['devices'],
-    queryFn: () => deviceApi.list({ limit: 100 }),
-  });
-
-  const { data: telemetry, isLoading } = useQuery({
-    queryKey: ['telemetry', selectedDevice],
-    queryFn: () => telemetryApi.getLatest(selectedDevice),
-    enabled: !!selectedDevice,
-  });
+  const { data: devices } = useDevices({ limit: 100 });
+  const { data: telemetry, isLoading } = useTelemetry(selectedDevice);
 
   return (
     <div className="space-y-6">
@@ -67,9 +58,7 @@ export default function Telemetry() {
       {/* Metrics */}
       {selectedDevice ? (
         isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <LoadingSpinner size="lg" />
-          </div>
+          <PageLoader />
         ) : telemetry ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
@@ -131,33 +120,5 @@ export default function Telemetry() {
         />
       )}
     </div>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  unit,
-  status,
-}: {
-  title: string;
-  value: string | number;
-  unit: string;
-  status?: MetricStatus;
-}) {
-  const statusTextColors: Record<MetricStatus, string> = {
-    good: 'text-green-600',
-    warning: 'text-yellow-600',
-    critical: 'text-red-600',
-  };
-
-  return (
-    <Card>
-      <p className="text-sm text-gray-500">{title}</p>
-      <p className={`text-3xl font-bold ${status ? statusTextColors[status] : 'text-gray-900'}`}>
-        {value}
-        <span className="text-lg font-normal text-gray-500 ml-1">{unit}</span>
-      </p>
-    </Card>
   );
 }

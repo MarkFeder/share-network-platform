@@ -7,6 +7,7 @@ import type {
   DeviceStats,
   PaginatedResponse,
 } from '../types';
+import { STORAGE_KEYS } from '../utils/constants';
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -17,7 +18,7 @@ const api = axios.create({
 
 // Request interceptor for auth
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -29,7 +30,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken');
+      localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
       window.location.href = '/login';
     }
     return Promise.reject(error);

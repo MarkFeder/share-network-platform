@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../utils/prisma.js';
 import { redis } from '../utils/redis.js';
 import { createContextLogger } from '../utils/logger.js';
 
 const router = Router();
-const prisma = new PrismaClient();
 const logger = createContextLogger('Health');
 
 interface HealthStatus {
